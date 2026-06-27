@@ -63,6 +63,9 @@ class TedNovastarCardEditor extends LitElement {
   public setConfig(config: NovastarCardConfig): void {
     const nextConfig: NovastarCardConfig = { ...config };
     nextConfig.type ||= "custom:ted-novastar-card";
+    if ((nextConfig.display_mode as string) === "detailed") {
+      delete nextConfig.display_mode;
+    }
     this.config = nextConfig;
     this.attemptedAutoDeviceDefault = false;
   }
@@ -120,6 +123,10 @@ class TedNovastarCardEditor extends LitElement {
             @value-changed=${this.handleFormChanged}
           ></ha-form>
         `)}
+
+        ${this.renderGroup("status", "Status items", "mdi:gauge",
+          Boolean(this.config.status_entity || this.config.temperature_entity || this.config.brightness_entity),
+          this.statusItemsContent(data))}
 
         ${this.renderGroup("sections", "Card sections", "mdi:view-dashboard-outline", true, html`
           <ha-sortable handle-selector=".drag-handle" @item-moved=${this._sectionMoved}>
@@ -179,16 +186,35 @@ class TedNovastarCardEditor extends LitElement {
           </div>
           <ha-icon icon=${def?.icon ?? "mdi:tune"}></ha-icon>
           <span class="section-row-title">${def?.label ?? id}</span>
+          <ha-switch
+            .checked=${this.isSectionShown(id)}
+            @click=${this.stopPropagation}
+            @change=${(event: Event) => this.handleSectionShowToggle(id, event)}
+          ></ha-switch>
         </div>
         <div class="panel-content">${settings}</div>
       </ha-expansion-panel>
     `;
   }
 
+  private statusItemsContent(data: NovastarCardConfig) {
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${data}
+        .schema=${[
+          { name: "status_entity", selector: { entity: {} } },
+          { name: "temperature_entity", selector: { entity: {} } },
+          { name: "brightness_entity", selector: { entity: {} } }
+        ]}
+        .computeLabel=${this.computeLabel}
+        @value-changed=${this.handleFormChanged}
+      ></ha-form>
+    `;
+  }
+
   private presetsSectionContent(data: NovastarCardConfig) {
-    const schema: Array<Record<string, unknown>> = [
-      { name: "show_presets", selector: { boolean: {} } }
-    ];
+    const schema: Array<Record<string, unknown>> = [];
     if (this.config.show_presets !== false) {
       schema.push({ name: "hide_presets_when_off", selector: { boolean: {} } });
     }
@@ -217,9 +243,17 @@ class TedNovastarCardEditor extends LitElement {
   }
 
   private layoutSectionContent(data: NovastarCardConfig) {
-    const schema: Array<Record<string, unknown>> = [
-      { name: "show_layout", selector: { boolean: {} } }
-    ];
+    const schema: Array<Record<string, unknown>> = [];
+    if (this.config.show_layout !== false) {
+      schema.push({
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "screen_color", selector: { ui_color: {} } },
+          { name: "screen_background_color", selector: { ui_color: {} } }
+        ]
+      });
+    }
     return html`
       <ha-form
         .hass=${this.hass}
@@ -346,7 +380,6 @@ class TedNovastarCardEditor extends LitElement {
           select: {
             mode: "dropdown",
             options: [
-              { value: "detailed", label: "Detailed" },
               { value: "standard", label: "Standard" },
               { value: "compact", label: "Compact" }
             ]
@@ -366,15 +399,7 @@ class TedNovastarCardEditor extends LitElement {
           }
         }
       },
-      { name: "brushed", selector: { boolean: {} } },
-      {
-        name: "",
-        type: "grid",
-        schema: [
-          { name: "screen_color", selector: { ui_color: {} } },
-          { name: "screen_background_color", selector: { ui_color: {} } }
-        ]
-      }
+      { name: "brushed", selector: { boolean: {} } }
     ];
   }
 
@@ -465,18 +490,13 @@ class TedNovastarCardEditor extends LitElement {
       || this.config.screens_entity
       || this.config.layers_entity
       || this.config.controller_entity
-      || this.config.status_entity
-      || this.config.brightness_entity
-      || this.config.temperature_entity
     );
 
     const schema: Array<Record<string, unknown>> = [];
 
     if (displayMode === "compact") {
       schema.push({ name: "show_header_in_compact", selector: { boolean: {} } });
-    }
-
-    if (displayMode === "detailed") {
+    } else {
       schema.push({ name: "show_card_version", selector: { boolean: {} } });
     }
 
@@ -491,10 +511,7 @@ class TedNovastarCardEditor extends LitElement {
         { name: "preset_entity", selector: { entity: {} } },
         { name: "screens_entity", selector: { entity: {} } },
         { name: "layers_entity", selector: { entity: {} } },
-        { name: "controller_entity", selector: { entity: {} } },
-        { name: "status_entity", selector: { entity: {} } },
-        { name: "brightness_entity", selector: { entity: {} } },
-        { name: "temperature_entity", selector: { entity: {} } }
+        { name: "controller_entity", selector: { entity: {} } }
       ]
     });
 
@@ -534,10 +551,30 @@ class TedNovastarCardEditor extends LitElement {
   }
 
   private handlePanelToggle(key: string, event: Event): void {
+    // Ignore expanded-changed events bubbling up from a nested panel (e.g. a
+    // section row inside "Card sections"); only react to this panel's own toggle.
+    if (event.target !== event.currentTarget) {
+      return;
+    }
     const expanded = (event.target as { expanded?: boolean } | null)?.expanded;
     if (typeof expanded === "boolean") {
       this.expandedPanels = { ...this.expandedPanels, [key]: expanded };
     }
+  }
+
+  // Per-section visibility (show_presets / show_layout), shown as a switch in the
+  // section row header.
+  private sectionShowKey(id: SectionId): "show_presets" | "show_layout" {
+    return id === "presets" ? "show_presets" : "show_layout";
+  }
+
+  private isSectionShown(id: SectionId): boolean {
+    return this.config[this.sectionShowKey(id)] !== false;
+  }
+
+  private handleSectionShowToggle(id: SectionId, event: Event): void {
+    const checked = (event.target as { checked?: boolean } | null)?.checked === true;
+    this.commitConfig({ ...this.config, [this.sectionShowKey(id)]: checked });
   }
 
   private _sectionMoved = (event: CustomEvent): void => {
@@ -559,7 +596,7 @@ class TedNovastarCardEditor extends LitElement {
     const nextConfig: NovastarCardConfig = { ...rawConfig };
     nextConfig.type = "custom:ted-novastar-card";
 
-    if (nextConfig.display_mode === "standard") {
+    if (nextConfig.display_mode !== "compact") {
       delete nextConfig.display_mode;
     }
     if (nextConfig.theme === "ted-style") {
@@ -925,6 +962,10 @@ class TedNovastarCardEditor extends LitElement {
 
     .section-row-header ha-icon {
       color: var(--secondary-text-color);
+      flex: none;
+    }
+
+    .section-row-header ha-switch {
       flex: none;
     }
 

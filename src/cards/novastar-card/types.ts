@@ -1,6 +1,6 @@
 import type { HassEntity, ThemeMode } from "./ha-types";
 
-export type DisplayMode = "detailed" | "standard" | "compact";
+export type DisplayMode = "standard" | "compact";
 
 // Brand logo layout variants. Each maps to a file base name on the HA server
 // (see brands.ts). `mark` = logo only, `stacked` = logo with the brand name

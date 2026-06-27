@@ -51,6 +51,8 @@ type TedAvReceiverCardConfig = {
   show_display?: boolean;
   show_volume_buttons?: boolean;
   show_sources?: boolean;
+  show_status?: boolean;
+  show_volume?: boolean;
   section_order?: string[];
   show_card_version?: boolean;
 };
@@ -343,13 +345,19 @@ export class TedAvReceiverCard extends LitElement {
             ${this.config.show_name !== false ? html`<div class="header">${headerText}</div>` : nothing}
           </div>
           <div class="header-actions">
-            <div class="header-status">
-              <span
-                class="status-dot ${powerIsOn ? "status-dot--on" : "status-dot--off"}"
-                title=${powerIsOn ? "On" : "Off"}
-              ></span>
-            </div>
-            ${hasVolume ? this.renderHeaderVolume(volumeLevel, muted, controlsDisabled) : nothing}
+            ${this.config.show_status !== false
+              ? html`
+                  <div class="header-status">
+                    <span
+                      class="status-dot ${powerIsOn ? "status-dot--on" : "status-dot--off"}"
+                      title=${powerIsOn ? "On" : "Off"}
+                    ></span>
+                  </div>
+                `
+              : nothing}
+            ${hasVolume && this.config.show_volume !== false
+              ? this.renderHeaderVolume(volumeLevel, muted, controlsDisabled)
+              : nothing}
             ${this.renderPowerButton(powerIsOn)}
           </div>
         </div>
@@ -1902,6 +1910,8 @@ const DENON_EDITOR_FIELD_LABELS: Record<string, string> = {
   show_display: "Show front panel display",
   show_volume_buttons: "Show volume +/- buttons",
   show_sources: "Show input sources",
+  show_status: "Show status icon",
+  show_volume: "Show volume",
   show_card_version: "Show card version"
 };
 
@@ -1992,6 +2002,10 @@ class TedAvReceiverCardEditor extends LitElement {
           ></ha-form>
         `)}
 
+        ${this.renderGroup("status", "Status items", "mdi:gauge",
+          this.config.show_status === false || this.config.show_volume === false,
+          this.statusItemsContent(data))}
+
         ${this.renderGroup("sections", "Card sections", "mdi:view-dashboard-outline", true, html`
           <ha-sortable handle-selector=".drag-handle" @item-moved=${this._sectionMoved}>
             <div class="section-list">
@@ -2050,16 +2064,34 @@ class TedAvReceiverCardEditor extends LitElement {
           </div>
           <ha-icon icon=${def?.icon ?? "mdi:tune"}></ha-icon>
           <span class="section-row-title">${def?.label ?? id}</span>
+          <ha-switch
+            .checked=${this.isSectionShown(id)}
+            @click=${this.stopPropagation}
+            @change=${(event: Event) => this.handleSectionShowToggle(id, event)}
+          ></ha-switch>
         </div>
         <div class="panel-content">${settings}</div>
       </ha-expansion-panel>
     `;
   }
 
+  private statusItemsContent(data: TedAvReceiverCardConfig) {
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${data}
+        .schema=${[
+          { name: "show_status", selector: { boolean: {} } },
+          { name: "show_volume", selector: { boolean: {} } }
+        ]}
+        .computeLabel=${this.computeLabel}
+        @value-changed=${this.handleFormChanged}
+      ></ha-form>
+    `;
+  }
+
   private displaySectionContent(data: TedAvReceiverCardConfig) {
-    const schema: Array<Record<string, unknown>> = [
-      { name: "show_display", selector: { boolean: {} } }
-    ];
+    const schema: Array<Record<string, unknown>> = [];
     if (this.config.show_display !== false) {
       schema.push({ name: "show_volume_buttons", selector: { boolean: {} } });
     }
@@ -2075,9 +2107,7 @@ class TedAvReceiverCardEditor extends LitElement {
   }
 
   private sourcesSectionContent(data: TedAvReceiverCardConfig) {
-    const schema: Array<Record<string, unknown>> = [
-      { name: "show_sources", selector: { boolean: {} } }
-    ];
+    const schema: Array<Record<string, unknown>> = [];
     if (this.config.show_sources !== false) {
       schema.push(
         {
@@ -2361,10 +2391,30 @@ class TedAvReceiverCardEditor extends LitElement {
   }
 
   private handlePanelToggle(key: string, event: Event): void {
+    // Ignore expanded-changed events bubbling up from a nested panel (e.g. a
+    // section row inside "Card sections"); only react to this panel's own toggle.
+    if (event.target !== event.currentTarget) {
+      return;
+    }
     const expanded = (event.target as { expanded?: boolean } | null)?.expanded;
     if (typeof expanded === "boolean") {
       this.expandedPanels = { ...this.expandedPanels, [key]: expanded };
     }
+  }
+
+  // Per-section visibility (show_display / show_sources), shown as a switch in the
+  // section row header.
+  private sectionShowKey(id: SectionId): "show_display" | "show_sources" {
+    return id === "display" ? "show_display" : "show_sources";
+  }
+
+  private isSectionShown(id: SectionId): boolean {
+    return this.config[this.sectionShowKey(id)] !== false;
+  }
+
+  private handleSectionShowToggle(id: SectionId, event: Event): void {
+    const checked = (event.target as { checked?: boolean } | null)?.checked === true;
+    this.commitConfig({ ...this.config, [this.sectionShowKey(id)]: checked });
   }
 
   private stopPropagation = (event: Event): void => {
@@ -2435,6 +2485,12 @@ class TedAvReceiverCardEditor extends LitElement {
     }
     if (nextConfig.show_sources !== false) {
       delete nextConfig.show_sources;
+    }
+    if (nextConfig.show_status !== false) {
+      delete nextConfig.show_status;
+    }
+    if (nextConfig.show_volume !== false) {
+      delete nextConfig.show_volume;
     }
     if (nextConfig.show_card_version !== true) {
       delete nextConfig.show_card_version;
@@ -2807,6 +2863,10 @@ class TedAvReceiverCardEditor extends LitElement {
 
     .section-row-header ha-icon {
       color: var(--secondary-text-color);
+      flex: none;
+    }
+
+    .section-row-header ha-switch {
       flex: none;
     }
 

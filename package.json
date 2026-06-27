@@ -1,6 +1,6 @@
 {
   "name": "teds-device-cards",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A collection of custom Lovelace cards for specific devices, for Home Assistant.",
   "private": false,
   "type": "module",

@@ -138,6 +138,8 @@ show_card_version: false
 | `show_display` | `true` | Show the AVR-style display panel (source, volume, sound mode, channel layout, active-speaker diagram). |
 | `show_volume_buttons` | `true` | Show a vertical volume +/- stepper beside the display panel. |
 | `show_sources` | `true` | Show the input-source button grid (when the receiver is on). |
+| `show_status` | `true` | Show the status icon (connection dot) in the header. |
+| `show_volume` | `true` | Show the volume control in the header. |
 | `section_order` | `[sources, display]` | Order of the **display** and **sources** sections (drag to reorder in the editor). |
 | `show_card_version` | `false` | Show the card version in a small footer. |
 
@@ -186,7 +188,7 @@ section_order: [presets, layout]
 | --- | --- | --- |
 | `controller_entity` | **required** | The primary controller entity (drives the card). |
 | `header` | `NovaStar H Series` | Title shown in the card header. |
-| `display_mode` | `standard` | `detailed` (labeled status, temperature, brightness, presets + layout), `standard` (streamlined controls with the layout preview as the centerpiece), or `compact` (layout visualization only). |
+| `display_mode` | `standard` | `standard` (default — streamlined controls with the layout preview as the centerpiece) or `compact` (layout visualization only). |
 | `theme` | `ted-style` | `ted-style` (self-contained) or `ha` (follow Home Assistant theme). |
 | `brushed` | `true` | Overlay a subtle brushed-metal sheen above the card background. |
 | `show_header_in_compact` | `false` | Show the header (and power button) in compact mode. |
@@ -195,7 +197,7 @@ section_order: [presets, layout]
 | `section_order` | `[presets, layout]` | Order of the reorderable body sections (drag to reorder in the editor). |
 | `screen_color` / `screen_background_color` | — | Customize the layout-preview layer tone / screen backdrop (theme color name or hex). |
 | `preset_order` | — | Choose which presets appear and in what order (draggable chips read live from the device). Reset automatically if the device's presets change. |
-| `show_card_version` | `false` | Show the card version at the bottom of the Detailed view. |
+| `show_card_version` | `false` | Show the card version in a small footer (standard mode). |
 
 **Entity overrides.** Beyond `controller_entity`, optional entities enrich the card: `power_entity`, `preset_entity`, `screens_entity`, `layers_entity`, `status_entity`, `brightness_entity`, and `temperature_entity`. With a `device_id` set, the card can auto-resolve these from the NovaStar device.
 
@@ -206,6 +208,14 @@ section_order: [presets, layout]
 ## 📋 Changelog
 
 The newest entry below is used as the GitHub Release notes by the release workflow, so it shows in the Home Assistant / HACS **update** dialog when you update. Newest first.
+
+### v0.0.2
+
+- **Card sections now reorder by drag-and-drop** — grab the handle on a section row to rearrange them (replaces the up/down menu), matching Ted's Cards.
+- **Section on/off toggles moved into the section headers** — flip a section's switch right from its heading (AV Receiver: front panel display / input sources; NovaStar H: presets / layout preview).
+- **New "Status items" editor section** on both cards — AV Receiver: show or hide the header **status icon** and **volume**; NovaStar H: the status, temperature, and brightness entities, grouped in one place.
+- **NovaStar H:** removed the **Detailed** display mode — the card is now **Standard** (default) or **Compact**.
+- Fixed: collapsing one card section no longer also collapses the whole **Card sections** group.
 
 ### v0.0.1
 

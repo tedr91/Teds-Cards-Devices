@@ -206,14 +206,10 @@ export class TedNovastarCard extends LitElement {
     const controllerValue = statusEntity
       ? `${controller.state} (${statusEntity.state})`
       : controller.state;
-    const temperatureUnit = temperatureEntity
-      ? this.readStringAttribute(temperatureEntity, "unit_of_measurement") ?? ""
-      : "";
 
     const displayMode = this.getDisplayMode();
     const themeMode = this.getThemeMode();
     const isCompact = displayMode === "compact";
-    const isDetailed = displayMode === "detailed";
     const showHeaderInCompact = this.config.show_header_in_compact === true;
     const showHeader = !isCompact || showHeaderInCompact;
     const bareLayoutMode = isCompact && !showHeaderInCompact;
@@ -222,9 +218,9 @@ export class TedNovastarCard extends LitElement {
       .filter(Boolean)
       .join(" ");
 
-    const showStatusDot = !isDetailed && Boolean(powerEntity);
-    const showTempDot = !isDetailed && Boolean(temperatureEntity);
-    const showBrightnessButton = !isDetailed && showBrightnessSlider;
+    const showStatusDot = Boolean(powerEntity);
+    const showTempDot = Boolean(temperatureEntity);
+    const showBrightnessButton = showBrightnessSlider;
     const showStatusSection = showStatusDot || showTempDot || showBrightnessButton;
     const temperatureSeverity = this.getTemperatureSeverity(temperatureEntity?.state);
     const layoutColorStyle = this.getLayoutColorStyle();
@@ -237,7 +233,7 @@ export class TedNovastarCard extends LitElement {
     const renderSection = (id: SectionId) => {
       if (id === "presets") {
         return !isCompact && presetEntity && showPresets && presetsVisibleForPower
-          ? this.renderPresetArea(visiblePresets, selectedPresetOption, powerFadeToBlack, isDetailed, presetEntity)
+          ? this.renderPresetArea(visiblePresets, selectedPresetOption, powerFadeToBlack, presetEntity)
           : nothing;
       }
 
@@ -245,14 +241,7 @@ export class TedNovastarCard extends LitElement {
         return nothing;
       }
       return layoutPayload
-        ? isDetailed
-          ? html`
-              <div class="layout-area">
-                <div class="preset-heading">Layout and Inputs</div>
-                ${this.renderLayoutPreview(layoutPayload, bareLayoutMode)}
-              </div>
-            `
-          : this.renderLayoutPreview(layoutPayload, bareLayoutMode)
+        ? this.renderLayoutPreview(layoutPayload, bareLayoutMode)
         : isCompact
           ? html`<div class="row"><span class="label">Layout</span><span class="value">Unavailable</span></div>`
           : nothing;
@@ -308,41 +297,8 @@ export class TedNovastarCard extends LitElement {
             `
           : nothing}
         <div class=${contentClasses}>
-          ${isDetailed
-            ? html`
-                <div class="row">
-                  <span class="label">Status</span>
-                  <span class="value status-value status-value--${powerIsOn ? "on" : "off"}">${controllerValue}</span>
-                </div>
-                ${temperatureEntity
-                  ? html`
-                      <div class="row">
-                        <span class="label">Temperature</span>
-                        <span class="value">${temperatureEntity.state}${temperatureUnit}</span>
-                      </div>
-                    `
-                  : nothing}
-                ${brightnessEntity
-                  ? html`
-                      <div class="row input-row">
-                        <span class="label">Brightness</span>
-                        ${showBrightnessSlider
-                          ? this.renderBrightnessControl(
-                              brightnessMin,
-                              brightnessMax,
-                              brightnessStep,
-                              brightnessValue,
-                              powerFadeToBlack,
-                              brightnessUnit
-                            )
-                          : html`<span class="value">${brightnessEntity.state}${brightnessUnit}</span>`}
-                      </div>
-                    `
-                  : nothing}
-              `
-            : nothing}
           ${sectionOrder.map((id) => renderSection(id))}
-          ${isDetailed && this.config.show_card_version === true ? this.renderVersionFooter() : nothing}
+          ${!isCompact && this.config.show_card_version === true ? this.renderVersionFooter() : nothing}
         </div>
         ${this.presetChooserOpen && presetEntity && visiblePresets.length > 0
           ? this.renderPresetChooser(visiblePresets, selectedPresetOption, powerFadeToBlack)
@@ -352,12 +308,7 @@ export class TedNovastarCard extends LitElement {
   }
 
   private getDisplayMode(): DisplayMode {
-    const mode = this.config?.display_mode;
-    if (mode === "detailed" || mode === "compact") {
-      return mode;
-    }
-
-    return "standard";
+    return this.config?.display_mode === "compact" ? "compact" : "standard";
   }
 
   private getThemeMode(): ThemeMode {
@@ -596,63 +547,25 @@ export class TedNovastarCard extends LitElement {
     }
   };
 
-  private renderBrightnessControl(
-    min: number,
-    max: number,
-    step: number,
-    value: number,
-    disabled: boolean,
-    unit: string
-  ) {
-    const span = max - min || 1;
-    const percent = Math.max(0, Math.min(100, Math.round(((value - min) / span) * 100)));
-    const readout = unit ? `${Math.round(value)}${unit}` : `${percent}%`;
-    return html`
-      <div class="brightness-control" style=${`--ted-style-brightness-fill:${percent}%`}>
-        <svg class="brightness-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0-6a1 1 0 0 1 1 1v1.5a1 1 0 1 1-2 0V3a1 1 0 0 1 1-1zm0 16.5a1 1 0 0 1 1 1V21a1 1 0 1 1-2 0v-1.5a1 1 0 0 1 1-1zM4.93 4.93a1 1 0 0 1 1.41 0l1.06 1.06A1 1 0 0 1 5.99 7.4L4.93 6.34a1 1 0 0 1 0-1.41zm11.67 11.67a1 1 0 0 1 1.41 0l1.06 1.06a1 1 0 0 1-1.41 1.41l-1.06-1.06a1 1 0 0 1 0-1.41zM2 12a1 1 0 0 1 1-1h1.5a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1zm17.5 0a1 1 0 0 1 1-1H22a1 1 0 1 1 0 2h-1.5a1 1 0 0 1-1-1zM4.93 19.07a1 1 0 0 1 0-1.41l1.06-1.06a1 1 0 1 1 1.41 1.41l-1.06 1.06a1 1 0 0 1-1.41 0zM16.6 7.4a1 1 0 0 1 0-1.41l1.06-1.06a1 1 0 1 1 1.41 1.41L18.01 7.4a1 1 0 0 1-1.41 0z"
-          ></path>
-        </svg>
-        <input
-          class="brightness-slider"
-          type="range"
-          min=${min}
-          max=${max}
-          step=${step}
-          .value=${String(value)}
-          .disabled=${disabled}
-          ?disabled=${disabled}
-          aria-label="Brightness"
-          @change=${this.handleBrightnessChanged}
-        />
-        <span class="brightness-value">${readout}</span>
-      </div>
-    `;
-  }
-
   private renderPresetArea(
     options: string[],
     selected: string,
     disabled: boolean,
-    isDetailed: boolean,
     presetEntity: HassEntity
   ) {
     if (options.length === 0) {
       return html`
         <div class="preset-area">
-          ${isDetailed ? html`<div class="preset-heading">Presets</div>` : nothing}
           <div class="row"><span class="value">${presetEntity.state}</span></div>
         </div>
       `;
     }
 
-    const showMore = !isDetailed && options.length > 5;
-    const visibleOptions = isDetailed || !showMore ? options : options.slice(0, 4);
+    const showMore = options.length > 5;
+    const visibleOptions = !showMore ? options : options.slice(0, 4);
 
     return html`
       <div class="preset-area">
-        ${isDetailed ? html`<div class="preset-heading">Presets</div>` : nothing}
         <div class="preset-grid" role="group" aria-label="Presets">
           ${visibleOptions.map((option) => {
             const isActive = this.optionEquals(option, selected);
