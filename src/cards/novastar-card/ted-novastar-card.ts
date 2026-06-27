@@ -201,6 +201,7 @@ export class TedNovastarCard extends LitElement {
       : "";
     const presetOptions = this.readStringListAttribute(presetEntity, "options");
     const visiblePresets = this.arrangePresets(presetOptions);
+    const presetOverflow = this.splitByMaxRows(visiblePresets).overflow;
     const selectedPresetOption = presetEntity
       ? this.resolveSelectedOption(presetEntity, presetOptions)
       : "";
@@ -310,8 +311,8 @@ export class TedNovastarCard extends LitElement {
           ${sectionOrder.map((id) => renderSection(id))}
           ${!isCompact && this.config.show_card_version === true ? this.renderVersionFooter() : nothing}
         </div>
-        ${this.presetChooserOpen && presetEntity && visiblePresets.length > 0
-          ? this.renderPresetChooser(visiblePresets, selectedPresetOption, powerFadeToBlack)
+        ${this.presetChooserOpen && presetEntity && presetOverflow.length > 0
+          ? this.renderPresetChooser(presetOverflow, selectedPresetOption, powerFadeToBlack)
           : nothing}
       </ha-card>
     `;
@@ -558,10 +559,24 @@ export class TedNovastarCard extends LitElement {
   };
 
   // Max number of 5-wide rows of presets to show before an overflow "…" button.
-  // 0 = unlimited (show every preset).
+  // Defaults to 1; 0 = unlimited (show every preset).
   private getMaxRows(): number {
     const value = this.config?.max_rows;
-    return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 1;
+  }
+
+  // Split a button list into the visible buttons and the overflow (hidden) ones,
+  // based on max_rows (5-wide grid). When limited, the last visible cell is the
+  // "…" button, so only (rows × 5 − 1) buttons are shown inline.
+  private splitByMaxRows(options: string[]): { visible: string[]; overflow: string[]; showMore: boolean } {
+    const maxRows = this.getMaxRows();
+    const limit = maxRows > 0 ? maxRows * 5 : Number.POSITIVE_INFINITY;
+    const showMore = options.length > limit;
+    return {
+      visible: showMore ? options.slice(0, limit - 1) : options,
+      overflow: showMore ? options.slice(limit - 1) : [],
+      showMore
+    };
   }
 
   private renderPresetArea(
@@ -578,10 +593,7 @@ export class TedNovastarCard extends LitElement {
       `;
     }
 
-    const maxRows = this.getMaxRows();
-    const limit = maxRows > 0 ? maxRows * 5 : Number.POSITIVE_INFINITY;
-    const showMore = options.length > limit;
-    const visibleOptions = showMore ? options.slice(0, limit - 1) : options;
+    const { visible: visibleOptions, showMore } = this.splitByMaxRows(options);
 
     return html`
       <div class="preset-area">
@@ -1125,6 +1137,7 @@ export class TedNovastarCard extends LitElement {
     }
 
     .preset-more-icon {
+      display: block;
       fill: currentColor;
       height: 26px;
       width: 26px;

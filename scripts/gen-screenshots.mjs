@@ -167,6 +167,7 @@ const AV_CONFIG = {
   sound_mode_entity: "sensor.home_theater_avr_sound_mode",
   active_speakers_entity: "sensor.home_theater_avr_active_speakers",
   source_icons: "color",
+  max_rows: 0,
 };
 
 /** A mock NovaStar H Series controller plus its companion status entities. */

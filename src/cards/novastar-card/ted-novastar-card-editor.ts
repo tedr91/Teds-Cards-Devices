@@ -93,6 +93,7 @@ class TedNovastarCardEditor extends LitElement {
       show_presets: true,
       hide_presets_when_off: true,
       show_layout: true,
+      max_rows: 1,
       ...this.config
     };
     const sectionOrder = orderSections(this.config.section_order);
@@ -681,7 +682,7 @@ class TedNovastarCardEditor extends LitElement {
     if (nextConfig.show_brightness !== false) {
       delete nextConfig.show_brightness;
     }
-    if (typeof nextConfig.max_rows !== "number" || nextConfig.max_rows <= 0) {
+    if (typeof nextConfig.max_rows !== "number" || nextConfig.max_rows === 1) {
       delete nextConfig.max_rows;
     }
     if (nextConfig.brushed !== false) {
@@ -1073,11 +1074,13 @@ class TedNovastarCardEditor extends LitElement {
 
     .status-item-row {
       align-items: center;
-      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
-      border-radius: 6px;
+      border: 1px solid var(--divider-color);
+      border-radius: var(--ha-card-border-radius, 12px);
+      box-sizing: border-box;
       display: flex;
-      gap: 10px;
-      padding: 8px 12px;
+      gap: 12px;
+      min-height: 48px;
+      padding: 4px 16px;
       width: 100%;
     }
 
@@ -1096,8 +1099,8 @@ class TedNovastarCardEditor extends LitElement {
       cursor: grab;
       display: flex;
       flex: none;
-      margin: -4px 0;
-      padding: 4px 2px;
+      margin-inline-start: -6px;
+      padding: 6px 2px;
       touch-action: none;
     }
 

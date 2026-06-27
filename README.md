@@ -214,6 +214,13 @@ section_order: [presets, layout]
 
 The newest entry below is used as the GitHub Release notes by the release workflow, so it shows in the Home Assistant / HACS **update** dialog when you update. Newest first.
 
+### v0.0.4
+
+- **“Max rows” now defaults to 1** on both cards' button grids (AV Receiver input sources, NovaStar presets) — each shows a single row with an overflow “…” by default. Set it to `0` for unlimited.
+- **The overflow “…” chooser now lists only the hidden items** (not the full list), matching Ted's Cards' Room Card.
+- Fixed the **“…” button icon not being centered** on the AV Receiver card.
+- Fixed the **Status items editor rows** to match the styling of the Card sections rows.
+
 ### v0.0.3
 
 - **Status items are now drag-to-reorder** — each header indicator is a draggable row with a show/hide switch in its header (AV Receiver: status icon, volume; NovaStar H: status, temperature, brightness).

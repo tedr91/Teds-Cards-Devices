@@ -391,6 +391,7 @@ export class TedAvReceiverCard extends LitElement {
       ? this.readStringListAttribute(sourceEntity, "options")
       : this.readStringListAttribute(mediaPlayer, "source_list");
     const arrangedSources = this.arrangeSources(sourceOptions);
+    const sourceOverflow = this.splitByMaxRows(arrangedSources).overflow;
     const currentSource = (sourceEntity ? sourceEntity.state : this.readStringAttribute(mediaPlayer, "source")) ?? "";
 
     const showSources = powerIsOn && this.config.show_sources !== false && arrangedSources.length > 0;
@@ -445,8 +446,8 @@ export class TedAvReceiverCard extends LitElement {
           ${sectionOrder.map((id) => renderSection(id))}
           ${this.config.show_card_version === true ? this.renderVersionFooter() : nothing}
         </div>
-        ${this.sourceChooserOpen && arrangedSources.length > 0
-          ? this.renderSourceChooser(arrangedSources, currentSource, controlsDisabled)
+        ${this.sourceChooserOpen && sourceOverflow.length > 0
+          ? this.renderSourceChooser(sourceOverflow, currentSource, controlsDisabled)
           : nothing}
       </ha-card>
     `;
@@ -793,18 +794,28 @@ export class TedAvReceiverCard extends LitElement {
   }
 
   // Max number of 5-wide rows of source buttons to show before an overflow "…"
-  // button. 0 = unlimited (show every source).
+  // button. Defaults to 1; 0 = unlimited (show every source).
   private getMaxRows(): number {
     const value = this.config?.max_rows;
-    return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 1;
+  }
+
+  // Split a button list into visible buttons and overflow (hidden) ones, based on
+  // max_rows (5-wide grid). When limited, the last visible cell is the "…" button.
+  private splitByMaxRows(options: string[]): { visible: string[]; overflow: string[]; showMore: boolean } {
+    const maxRows = this.getMaxRows();
+    const limit = maxRows > 0 ? maxRows * 5 : Number.POSITIVE_INFINITY;
+    const showMore = options.length > limit;
+    return {
+      visible: showMore ? options.slice(0, limit - 1) : options,
+      overflow: showMore ? options.slice(limit - 1) : [],
+      showMore
+    };
   }
 
   private renderSourceArea(options: string[], selected: string, disabled: boolean, iconMode: SourceIconMode, labelMode: SourceLabelMode) {
     const cbiAvailable = iconMode === "off" ? false : isCbiAvailable();
-    const maxRows = this.getMaxRows();
-    const limit = maxRows > 0 ? maxRows * 5 : Number.POSITIVE_INFINITY;
-    const showMore = options.length > limit;
-    const visibleOptions = showMore ? options.slice(0, limit - 1) : options;
+    const { visible: visibleOptions, showMore } = this.splitByMaxRows(options);
     return html`
       <div class="source-grid" role="group" aria-label="Input source">
         ${visibleOptions.map((option) => {
@@ -2004,9 +2015,11 @@ export class TedAvReceiverCard extends LitElement {
 
     .source-button--more {
       color: var(--ted-style-text);
+      justify-content: center;
     }
 
     .source-more-icon {
+      display: block;
       fill: currentColor;
       height: 26px;
       width: 26px;
@@ -2188,6 +2201,7 @@ class TedAvReceiverCardEditor extends LitElement {
       show_sources: true,
       logo_scale: 100,
       show_name: true,
+      max_rows: 1,
       ...this.config
     };
     const sectionOrder = orderSections(this.config.section_order);
@@ -2756,7 +2770,7 @@ class TedAvReceiverCardEditor extends LitElement {
     if (nextConfig.show_volume !== false) {
       delete nextConfig.show_volume;
     }
-    if (typeof nextConfig.max_rows !== "number" || nextConfig.max_rows <= 0) {
+    if (typeof nextConfig.max_rows !== "number" || nextConfig.max_rows === 1) {
       delete nextConfig.max_rows;
     }
     if (nextConfig.show_card_version !== true) {
@@ -3172,11 +3186,13 @@ class TedAvReceiverCardEditor extends LitElement {
 
     .status-item-row {
       align-items: center;
-      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
-      border-radius: 6px;
+      border: 1px solid var(--divider-color);
+      border-radius: var(--ha-card-border-radius, 12px);
+      box-sizing: border-box;
       display: flex;
-      gap: 10px;
-      padding: 8px 12px;
+      gap: 12px;
+      min-height: 48px;
+      padding: 4px 16px;
       width: 100%;
     }
 
@@ -3195,8 +3211,8 @@ class TedAvReceiverCardEditor extends LitElement {
       cursor: grab;
       display: flex;
       flex: none;
-      margin: -4px 0;
-      padding: 4px 2px;
+      margin-inline-start: -6px;
+      padding: 6px 2px;
       touch-action: none;
     }
 
