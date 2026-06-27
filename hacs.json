@@ -1,0 +1,6 @@
+{
+  "name": "Ted's Device Cards",
+  "filename": "teds-device-cards.js",
+  "render_readme": true,
+  "homeassistant": "2024.4.0"
+}

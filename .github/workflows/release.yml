@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload release asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/teds-device-cards.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync release notes from changelog
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          ver="${TAG#v}"
+          notes="$(awk -v tag="$TAG" -v ver="$ver" '
+            function trim(s){ gsub(/\r/,"",s); sub(/^[ \t]+/,"",s); sub(/[ \t]+$/,"",s); return s }
+            /^## / { capture = 0; next }
+            /^### / {
+              h = trim(substr($0, 5))
+              capture = (h == tag || h == ver || h == "v" ver) ? 1 : 0
+              next
+            }
+            capture { print }
+          ' README.md)"
+          notes="$(printf '%s\n' "$notes" | sed -e '/./,$!d' | tac | sed -e '/./,$!d' | tac)"
+          # Render as a "loose" list: a blank line between top-level bullets, so every
+          # markdown renderer (GitHub, HACS, the HA update dialog) shows them as
+          # separate items instead of lumping them into one run-on paragraph.
+          notes="$(printf '%s\n' "$notes" | awk 'NR>1 && /^[-*][ \t]/ {print ""} {print}')"
+          if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
+            echo "No changelog entry for $TAG in README.md; leaving release notes unchanged."
+            exit 0
+          fi
+          printf '%s\n' "$notes" > release-notes.md
+          echo "Release notes for $TAG:"
+          cat release-notes.md
+          gh release edit "$TAG" --notes-file release-notes.md
+
+      - name: Upload artifact (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: teds-device-cards
+          path: dist/teds-device-cards.js
