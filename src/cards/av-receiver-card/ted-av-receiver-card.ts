@@ -100,17 +100,6 @@ function orderSections(configured: string[] | undefined): SectionId[] {
   return result;
 }
 
-// True when the newer Web-Awesome `ha-dropdown` component is registered. Mirrors
-// Bubble Card's detection so the reorder menu uses the modern dropdown when
-// available and falls back to `ha-button-menu` on older Home Assistant.
-function supportsHaDropdown(): boolean {
-  try {
-    return typeof customElements !== "undefined" && customElements.get("ha-dropdown") !== undefined;
-  } catch {
-    return false;
-  }
-}
-
 // Canonical channel-code order used by the integration's active_speakers sensor
 // (matches its CHANNEL_MAP). The sensor reports only the channels active for the
 // current surround mode; the display shows those exact codes, sorted by this
@@ -2004,9 +1993,11 @@ class TedAvReceiverCardEditor extends LitElement {
         `)}
 
         ${this.renderGroup("sections", "Card sections", "mdi:view-dashboard-outline", true, html`
-          <div class="section-list">
-            ${sectionOrder.map((id, index) => this.renderSectionRow(id, index, sectionOrder.length, data))}
-          </div>
+          <ha-sortable handle-selector=".drag-handle" @item-moved=${this._sectionMoved}>
+            <div class="section-list">
+              ${sectionOrder.map((id) => this.renderSectionRow(id, data))}
+            </div>
+          </ha-sortable>
         `)}
 
         ${this.renderGroup("advanced", "Advanced", "mdi:cog", false, html`
@@ -2040,7 +2031,7 @@ class TedAvReceiverCardEditor extends LitElement {
   }
 
   // One reorderable section row inside "Card sections".
-  private renderSectionRow(id: SectionId, index: number, total: number, data: TedAvReceiverCardConfig) {
+  private renderSectionRow(id: SectionId, data: TedAvReceiverCardConfig) {
     const def = SECTION_DEFS.find((section) => section.id === id);
     const key = `section-${id}`;
     const settings = id === "display"
@@ -2054,64 +2045,14 @@ class TedAvReceiverCardEditor extends LitElement {
         @expanded-changed=${(event: Event) => this.handlePanelToggle(key, event)}
       >
         <div slot="header" class="section-row-header">
+          <div class="drag-handle" @click=${this.stopPropagation} title="Drag to reorder">
+            <ha-icon icon="mdi:drag"></ha-icon>
+          </div>
           <ha-icon icon=${def?.icon ?? "mdi:tune"}></ha-icon>
           <span class="section-row-title">${def?.label ?? id}</span>
-          ${this.renderSectionMenu(id, index, total)}
         </div>
         <div class="panel-content">${settings}</div>
       </ha-expansion-panel>
-    `;
-  }
-
-  // The three-dot reorder menu for a section row. Items stay hidden inside a
-  // popup until the trigger is clicked, matching Bubble Card's sub-button menu
-  // (ha-dropdown on newer HA, ha-button-menu + mwc-list-item as a fallback).
-  private renderSectionMenu(id: SectionId, index: number, total: number) {
-    const upDisabled = index === 0;
-    const downDisabled = index === total - 1;
-    const trigger = html`
-      <ha-icon-button slot="trigger" label="Reorder section">
-        <ha-icon icon="mdi:dots-vertical"></ha-icon>
-      </ha-icon-button>
-    `;
-
-    if (supportsHaDropdown()) {
-      return html`
-        <ha-dropdown
-          @click=${this.stopPropagation}
-          @closed=${this.stopPropagation}
-        >
-          ${trigger}
-          <ha-dropdown-item ?disabled=${upDisabled} @click=${() => this.moveSection(id, -1)}>
-            <ha-icon slot="icon" icon="mdi:arrow-up"></ha-icon>
-            Move up
-          </ha-dropdown-item>
-          <ha-dropdown-item ?disabled=${downDisabled} @click=${() => this.moveSection(id, 1)}>
-            <ha-icon slot="icon" icon="mdi:arrow-down"></ha-icon>
-            Move down
-          </ha-dropdown-item>
-        </ha-dropdown>
-      `;
-    }
-
-    return html`
-      <ha-button-menu
-        corner="BOTTOM_START"
-        menuCorner="START"
-        fixed
-        @click=${this.stopPropagation}
-        @closed=${this.stopPropagation}
-      >
-        ${trigger}
-        <mwc-list-item graphic="icon" ?disabled=${upDisabled} @click=${() => this.moveSection(id, -1)}>
-          <ha-icon slot="graphic" icon="mdi:arrow-up"></ha-icon>
-          Move up
-        </mwc-list-item>
-        <mwc-list-item graphic="icon" ?disabled=${downDisabled} @click=${() => this.moveSection(id, 1)}>
-          <ha-icon slot="graphic" icon="mdi:arrow-down"></ha-icon>
-          Move down
-        </mwc-list-item>
-      </ha-button-menu>
     `;
   }
 
@@ -2430,17 +2371,17 @@ class TedAvReceiverCardEditor extends LitElement {
     event.stopPropagation();
   };
 
-  private moveSection(id: SectionId, direction: -1 | 1): void {
+  private _sectionMoved = (event: CustomEvent): void => {
+    event.stopPropagation();
+    const { oldIndex, newIndex } = event.detail as { oldIndex: number; newIndex: number };
     const order = orderSections(this.config.section_order);
-    const index = order.indexOf(id);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= order.length) {
+    if (oldIndex < 0 || oldIndex >= order.length || newIndex < 0 || newIndex >= order.length) {
       return;
     }
     const next = [...order];
-    [next[index], next[target]] = [next[target], next[index]];
+    next.splice(newIndex, 0, next.splice(oldIndex, 1)[0]);
     this.commitConfig({ ...this.config, section_order: next });
-  }
+  };
 
   private computeLabel = (schema: { name: string }): string => {
     return DENON_EDITOR_FIELD_LABELS[schema.name] ?? schema.name;
@@ -2877,10 +2818,19 @@ class TedAvReceiverCardEditor extends LitElement {
       white-space: nowrap;
     }
 
-    .section-row-header ha-button-menu,
-    .section-row-header ha-dropdown {
+    .section-row-header .drag-handle {
+      align-items: center;
+      color: var(--secondary-text-color);
+      cursor: grab;
+      display: flex;
       flex: none;
-      margin: -8px 0;
+      margin: -6px 2px -6px -6px;
+      padding: 6px 2px;
+      touch-action: none;
+    }
+
+    .section-row-header .drag-handle ha-icon {
+      pointer-events: none;
     }
   `;
 }

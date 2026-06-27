@@ -138,7 +138,7 @@ show_card_version: false
 | `show_display` | `true` | Show the AVR-style display panel (source, volume, sound mode, channel layout, active-speaker diagram). |
 | `show_volume_buttons` | `true` | Show a vertical volume +/- stepper beside the display panel. |
 | `show_sources` | `true` | Show the input-source button grid (when the receiver is on). |
-| `section_order` | `[sources, display]` | Order of the **display** and **sources** sections. |
+| `section_order` | `[sources, display]` | Order of the **display** and **sources** sections (drag to reorder in the editor). |
 | `show_card_version` | `false` | Show the card version in a small footer. |
 
 **Brand icons.** The card ships its own hand-tuned colour/monochrome icons for many popular sources — including Netflix, Spotify, YouTube, Plex, Prime Video, Apple TV, Roku, Steam, Xbox, Nintendo, PlayStation, Fire TV, HEOS, Tidal, Pandora, Nvidia, Cast, Sonos, Denon, Marantz, and Kaleidescape. Icons are matched from the source name; unmatched sources use a generic input glyph. For each source the card picks the first available of: its bundled icon → [Custom Brand Icons](https://github.com/elax46/custom-brand-icons) (`phu:`, if installed) → Material Design Icons (`mdi:`) → a generic glyph.
@@ -192,7 +192,7 @@ section_order: [presets, layout]
 | `show_header_in_compact` | `false` | Show the header (and power button) in compact mode. |
 | `show_presets` / `show_layout` | `true` | Show the Presets section / Layout preview section. |
 | `hide_presets_when_off` | `true` | Hide the Presets section while the power entity is off. |
-| `section_order` | `[presets, layout]` | Order of the reorderable body sections. |
+| `section_order` | `[presets, layout]` | Order of the reorderable body sections (drag to reorder in the editor). |
 | `screen_color` / `screen_background_color` | — | Customize the layout-preview layer tone / screen backdrop (theme color name or hex). |
 | `preset_order` | — | Choose which presets appear and in what order (draggable chips read live from the device). Reset automatically if the device's presets change. |
 | `show_card_version` | `false` | Show the card version at the bottom of the Detailed view. |
