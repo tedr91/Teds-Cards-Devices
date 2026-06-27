@@ -135,12 +135,14 @@ show_card_version: false
 | `device_id` | — | The Denon/Marantz device; auto-resolves all entities. |
 | `source_icons` | `color` | Brand/category icon above each source button: `color`, `monochrome`, or `off`. |
 | `source_order` | — | Choose which sources appear and in what order (draggable chips in the editor). Reset automatically if the device's sources change. |
+| `max_rows` | `0` | Max number of 5-wide rows of source buttons before an overflow “…” button (opens a chooser). `0` = unlimited. |
 | `show_display` | `true` | Show the AVR-style display panel (source, volume, sound mode, channel layout, active-speaker diagram). |
 | `show_volume_buttons` | `true` | Show a vertical volume +/- stepper beside the display panel. |
 | `show_sources` | `true` | Show the input-source button grid (when the receiver is on). |
 | `show_status` | `true` | Show the status icon (connection dot) in the header. |
 | `show_volume` | `true` | Show the volume control in the header. |
 | `section_order` | `[sources, display]` | Order of the **display** and **sources** sections (drag to reorder in the editor). |
+| `status_order` | `[status, volume]` | Order of the header status items (status icon, volume) — drag to reorder in the **Status items** editor section. |
 | `show_card_version` | `false` | Show the card version in a small footer. |
 
 **Brand icons.** The card ships its own hand-tuned colour/monochrome icons for many popular sources — including Netflix, Spotify, YouTube, Plex, Prime Video, Apple TV, Roku, Steam, Xbox, Nintendo, PlayStation, Fire TV, HEOS, Tidal, Pandora, Nvidia, Cast, Sonos, Denon, Marantz, and Kaleidescape. Icons are matched from the source name; unmatched sources use a generic input glyph. For each source the card picks the first available of: its bundled icon → [Custom Brand Icons](https://github.com/elax46/custom-brand-icons) (`phu:`, if installed) → Material Design Icons (`mdi:`) → a generic glyph.
@@ -195,8 +197,11 @@ section_order: [presets, layout]
 | `show_presets` / `show_layout` | `true` | Show the Presets section / Layout preview section. |
 | `hide_presets_when_off` | `true` | Hide the Presets section while the power entity is off. |
 | `section_order` | `[presets, layout]` | Order of the reorderable body sections (drag to reorder in the editor). |
+| `status_order` | `[status, temperature, brightness]` | Order of the header status items — drag to reorder in the **Status items** editor section. |
+| `show_status` / `show_temperature` / `show_brightness` | `true` | Show or hide each header status indicator (toggles in the **Status items** section). |
 | `screen_color` / `screen_background_color` | — | Customize the layout-preview layer tone / screen backdrop (theme color name or hex). |
 | `preset_order` | — | Choose which presets appear and in what order (draggable chips read live from the device). Reset automatically if the device's presets change. |
+| `max_rows` | `0` | Max number of 5-wide rows of preset buttons before an overflow “…” button (opens a chooser). `0` = unlimited. |
 | `show_card_version` | `false` | Show the card version in a small footer (standard mode). |
 
 **Entity overrides.** Beyond `controller_entity`, optional entities enrich the card: `power_entity`, `preset_entity`, `screens_entity`, `layers_entity`, `status_entity`, `brightness_entity`, and `temperature_entity`. With a `device_id` set, the card can auto-resolve these from the NovaStar device.
@@ -208,6 +213,11 @@ section_order: [presets, layout]
 ## 📋 Changelog
 
 The newest entry below is used as the GitHub Release notes by the release workflow, so it shows in the Home Assistant / HACS **update** dialog when you update. Newest first.
+
+### v0.0.3
+
+- **Status items are now drag-to-reorder** — each header indicator is a draggable row with a show/hide switch in its header (AV Receiver: status icon, volume; NovaStar H: status, temperature, brightness).
+- **New “Max rows” option** on the AV Receiver's **Input sources** and the NovaStar's **Presets** — limit the 5-wide button grid to a set number of rows, with an overflow “…” chooser for the rest (`0` = unlimited). NovaStar presets now default to showing all; set **Max rows** to `1` for the previous single-row behavior.
 
 ### v0.0.2
 

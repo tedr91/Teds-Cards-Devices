@@ -12,6 +12,7 @@ import {
 } from "./const";
 import {
   orderSections,
+  orderStatusItems,
   type DisplayMode,
   type LayerSourceChooser,
   type LayerSourceRow,
@@ -21,6 +22,7 @@ import {
   type NovastarCardConfig,
   type ResolvedEntityMap,
   type SectionId,
+  type StatusItemId,
   type ViewLayer
 } from "./types";
 
@@ -218,11 +220,40 @@ export class TedNovastarCard extends LitElement {
       .filter(Boolean)
       .join(" ");
 
-    const showStatusDot = Boolean(powerEntity);
-    const showTempDot = Boolean(temperatureEntity);
-    const showBrightnessButton = showBrightnessSlider;
+    const showStatusDot = this.config.show_status !== false && Boolean(powerEntity);
+    const showTempDot = this.config.show_temperature !== false && Boolean(temperatureEntity);
+    const showBrightnessButton = this.config.show_brightness !== false && showBrightnessSlider;
     const showStatusSection = showStatusDot || showTempDot || showBrightnessButton;
     const temperatureSeverity = this.getTemperatureSeverity(temperatureEntity?.state);
+    const statusOrder = orderStatusItems(this.config.status_order);
+    const renderStatusItem = (id: StatusItemId) => {
+      if (id === "status") {
+        return showStatusDot
+          ? html`<span
+              class="status-dot ${powerIsOn ? "status-dot--on" : "status-dot--off"}"
+              title=${controllerValue}
+            ></span>`
+          : nothing;
+      }
+      if (id === "temperature") {
+        return showTempDot
+          ? html`<span
+              class="status-dot ${powerIsOn ? `status-dot--temp-${temperatureSeverity}` : "status-dot--off"}"
+              title=${`Temperature: ${temperatureEntity?.state ?? ""}`}
+            ></span>`
+          : nothing;
+      }
+      return showBrightnessButton
+        ? this.renderHeaderBrightnessToggle(
+            brightnessMin,
+            brightnessMax,
+            brightnessStep,
+            brightnessValue,
+            powerFadeToBlack,
+            brightnessUnit
+          )
+        : nothing;
+    };
     const layoutColorStyle = this.getLayoutColorStyle();
 
     const showPresets = this.config.show_presets !== false;
@@ -266,28 +297,7 @@ export class TedNovastarCard extends LitElement {
                   ${showStatusSection
                     ? html`
                         <div class="header-status">
-                          ${showStatusDot
-                            ? html`<span
-                                class="status-dot ${powerIsOn ? "status-dot--on" : "status-dot--off"}"
-                                title=${controllerValue}
-                              ></span>`
-                            : nothing}
-                          ${showTempDot
-                            ? html`<span
-                                class="status-dot ${powerIsOn ? `status-dot--temp-${temperatureSeverity}` : "status-dot--off"}"
-                                title=${`Temperature: ${temperatureEntity?.state ?? ""}`}
-                              ></span>`
-                            : nothing}
-                          ${showBrightnessButton
-                            ? this.renderHeaderBrightnessToggle(
-                                brightnessMin,
-                                brightnessMax,
-                                brightnessStep,
-                                brightnessValue,
-                                powerFadeToBlack,
-                                brightnessUnit
-                              )
-                            : nothing}
+                          ${statusOrder.map((id) => renderStatusItem(id))}
                         </div>
                       `
                     : nothing}
@@ -547,6 +557,13 @@ export class TedNovastarCard extends LitElement {
     }
   };
 
+  // Max number of 5-wide rows of presets to show before an overflow "…" button.
+  // 0 = unlimited (show every preset).
+  private getMaxRows(): number {
+    const value = this.config?.max_rows;
+    return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  }
+
   private renderPresetArea(
     options: string[],
     selected: string,
@@ -561,8 +578,10 @@ export class TedNovastarCard extends LitElement {
       `;
     }
 
-    const showMore = options.length > 5;
-    const visibleOptions = !showMore ? options : options.slice(0, 4);
+    const maxRows = this.getMaxRows();
+    const limit = maxRows > 0 ? maxRows * 5 : Number.POSITIVE_INFINITY;
+    const showMore = options.length > limit;
+    const visibleOptions = showMore ? options.slice(0, limit - 1) : options;
 
     return html`
       <div class="preset-area">

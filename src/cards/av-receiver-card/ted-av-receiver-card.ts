@@ -54,6 +54,8 @@ type TedAvReceiverCardConfig = {
   show_status?: boolean;
   show_volume?: boolean;
   section_order?: string[];
+  status_order?: string[];
+  max_rows?: number;
   show_card_version?: boolean;
 };
 
@@ -95,6 +97,36 @@ function orderSections(configured: string[] | undefined): SectionId[] {
     }
   }
   for (const id of DEFAULT_SECTION_ORDER) {
+    if (!seen.has(id)) {
+      result.push(id);
+    }
+  }
+  return result;
+}
+
+// The header status items, in default order. Each is a small indicator the user
+// can hide or reorder via the editor's "Status items" section.
+type StatusItemId = "status" | "volume";
+
+const STATUS_ITEM_DEFS: Array<{ id: StatusItemId; label: string; icon: string }> = [
+  { id: "status", label: "Status icon", icon: "mdi:lan-connect" },
+  { id: "volume", label: "Volume", icon: "mdi:volume-high" }
+];
+
+const DEFAULT_STATUS_ORDER: StatusItemId[] = STATUS_ITEM_DEFS.map((item) => item.id);
+
+function orderStatusItems(configured: string[] | undefined): StatusItemId[] {
+  const result: StatusItemId[] = [];
+  const seen = new Set<string>();
+  if (Array.isArray(configured)) {
+    for (const id of configured) {
+      if (DEFAULT_STATUS_ORDER.includes(id as StatusItemId) && !seen.has(id)) {
+        result.push(id as StatusItemId);
+        seen.add(id);
+      }
+    }
+  }
+  for (const id of DEFAULT_STATUS_ORDER) {
     if (!seen.has(id)) {
       result.push(id);
     }
@@ -218,9 +250,50 @@ export class TedAvReceiverCard extends LitElement {
     return stub;
   }
 
+  private sourceChooserOpen = false;
+  private sourceAnchorRect?: DOMRect;
+
   protected updated(): void {
     void this.ensureResolvedEntities();
     this.syncOptimisticPowerState();
+    this.syncSourceChooser();
+  }
+
+  private syncSourceChooser(): void {
+    const root = this.renderRoot as ShadowRoot;
+    const popover = root.getElementById("ted-source-popover") as (HTMLElement & { showPopover?: () => void }) | null;
+    if (popover && this.sourceChooserOpen && !popover.matches(":popover-open")) {
+      popover.showPopover?.();
+      this.positionChooserPopover(popover, this.sourceAnchorRect);
+    }
+  }
+
+  private positionChooserPopover(popover: HTMLElement, anchor?: DOMRect): void {
+    const margin = 8;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const rect = popover.getBoundingClientRect();
+
+    popover.style.position = "fixed";
+    popover.style.margin = "0";
+
+    if (!anchor) {
+      popover.style.left = `${Math.round((viewportWidth - rect.width) / 2)}px`;
+      popover.style.top = `${Math.round((viewportHeight - rect.height) / 2)}px`;
+      return;
+    }
+
+    let left = anchor.right - rect.width;
+    left = Math.max(margin, Math.min(left, viewportWidth - rect.width - margin));
+
+    let top = anchor.bottom + margin;
+    if (top + rect.height > viewportHeight - margin && anchor.top - margin - rect.height >= margin) {
+      top = anchor.top - margin - rect.height;
+    }
+    top = Math.max(margin, Math.min(top, viewportHeight - rect.height - margin));
+
+    popover.style.left = `${Math.round(left)}px`;
+    popover.style.top = `${Math.round(top)}px`;
   }
 
   disconnectedCallback(): void {
@@ -336,6 +409,25 @@ export class TedAvReceiverCard extends LitElement {
         : nothing;
     };
 
+    const statusOrder = orderStatusItems(this.config.status_order);
+    const showStatusIcon = this.config.show_status !== false;
+    const showVolume = hasVolume && this.config.show_volume !== false;
+    const renderStatusItem = (id: StatusItemId) => {
+      if (id === "status") {
+        return showStatusIcon
+          ? html`
+              <div class="header-status">
+                <span
+                  class="status-dot ${powerIsOn ? "status-dot--on" : "status-dot--off"}"
+                  title=${powerIsOn ? "On" : "Off"}
+                ></span>
+              </div>
+            `
+          : nothing;
+      }
+      return showVolume ? this.renderHeaderVolume(volumeLevel, muted, controlsDisabled) : nothing;
+    };
+
     return html`
       <ha-card class="ted-card ${tedCardThemeClass(themeMode)} ${powerIsOn ? "is-on" : "is-off"}">
         ${this.config.brushed !== false ? brushedOverlay : nothing}
@@ -345,19 +437,7 @@ export class TedAvReceiverCard extends LitElement {
             ${this.config.show_name !== false ? html`<div class="header">${headerText}</div>` : nothing}
           </div>
           <div class="header-actions">
-            ${this.config.show_status !== false
-              ? html`
-                  <div class="header-status">
-                    <span
-                      class="status-dot ${powerIsOn ? "status-dot--on" : "status-dot--off"}"
-                      title=${powerIsOn ? "On" : "Off"}
-                    ></span>
-                  </div>
-                `
-              : nothing}
-            ${hasVolume && this.config.show_volume !== false
-              ? this.renderHeaderVolume(volumeLevel, muted, controlsDisabled)
-              : nothing}
+            ${statusOrder.map((id) => renderStatusItem(id))}
             ${this.renderPowerButton(powerIsOn)}
           </div>
         </div>
@@ -365,6 +445,9 @@ export class TedAvReceiverCard extends LitElement {
           ${sectionOrder.map((id) => renderSection(id))}
           ${this.config.show_card_version === true ? this.renderVersionFooter() : nothing}
         </div>
+        ${this.sourceChooserOpen && arrangedSources.length > 0
+          ? this.renderSourceChooser(arrangedSources, currentSource, controlsDisabled)
+          : nothing}
       </ha-card>
     `;
   }
@@ -709,11 +792,22 @@ export class TedAvReceiverCard extends LitElement {
     `;
   }
 
+  // Max number of 5-wide rows of source buttons to show before an overflow "…"
+  // button. 0 = unlimited (show every source).
+  private getMaxRows(): number {
+    const value = this.config?.max_rows;
+    return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  }
+
   private renderSourceArea(options: string[], selected: string, disabled: boolean, iconMode: SourceIconMode, labelMode: SourceLabelMode) {
     const cbiAvailable = iconMode === "off" ? false : isCbiAvailable();
+    const maxRows = this.getMaxRows();
+    const limit = maxRows > 0 ? maxRows * 5 : Number.POSITIVE_INFINITY;
+    const showMore = options.length > limit;
+    const visibleOptions = showMore ? options.slice(0, limit - 1) : options;
     return html`
       <div class="source-grid" role="group" aria-label="Input source">
-        ${options.map((option) => {
+        ${visibleOptions.map((option) => {
           const isActive = this.optionEquals(option, selected);
           const showIcon = iconMode !== "off";
           const showLabel = this.shouldShowSourceLabel(option, iconMode, labelMode);
@@ -730,8 +824,70 @@ export class TedAvReceiverCard extends LitElement {
             >${showIcon ? this.renderSourceIcon(option, iconMode, cbiAvailable) : nothing}${showLabel ? html`<span class="source-button-label">${option.slice(0, 13)}</span>` : nothing}</button>
           `;
         })}
+        ${showMore
+          ? html`
+              <button
+                type="button"
+                class="source-button source-button--more"
+                ?disabled=${disabled}
+                aria-haspopup="true"
+                aria-expanded=${this.sourceChooserOpen ? "true" : "false"}
+                aria-label="Show all sources"
+                title="Show all sources"
+                @click=${this.openSourceChooser}
+              >
+                <svg class="source-more-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M16 12a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm-6 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm-6 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0z"></path>
+                </svg>
+              </button>
+            `
+          : nothing}
       </div>
     `;
+  }
+
+  private renderSourceChooser(options: string[], selected: string, disabled: boolean) {
+    return html`
+      <div
+        id="ted-source-popover"
+        class="ted-popover"
+        popover
+        @toggle=${this.handleSourcePopoverToggle}
+      >
+        <div class="ted-popover-title">Select Source</div>
+        <div class="ted-popover-options">
+          ${options.map((option) => html`
+            <button
+              type="button"
+              class="ted-popover-option ${this.optionEquals(option, selected) ? "selected" : ""}"
+              ?disabled=${disabled}
+              @click=${() => this.handleSourceChooserOptionClick(option)}
+            >${option}</button>
+          `)}
+        </div>
+      </div>
+    `;
+  }
+
+  private handleSourcePopoverToggle = (event: Event): void => {
+    const toggleEvent = event as Event & { newState?: string };
+    if (toggleEvent.newState === "closed" && this.sourceChooserOpen) {
+      this.sourceChooserOpen = false;
+      this.requestUpdate();
+    }
+  };
+
+  private openSourceChooser = (event: Event): void => {
+    const target = event.currentTarget as HTMLElement | null;
+    this.sourceAnchorRect = target?.getBoundingClientRect();
+    this.sourceChooserOpen = true;
+    this.requestUpdate();
+  };
+
+  private async handleSourceChooserOptionClick(option: string): Promise<void> {
+    this.sourceChooserOpen = false;
+    this.requestUpdate();
+    await this.handleSourceSelect(option);
   }
 
   private renderSourceIcon(label: string, mode: SourceIconMode, cbiAvailable: boolean) {
@@ -1846,6 +2002,75 @@ export class TedAvReceiverCard extends LitElement {
       color: var(--ted-style-on-accent);
     }
 
+    .source-button--more {
+      color: var(--ted-style-text);
+    }
+
+    .source-more-icon {
+      fill: currentColor;
+      height: 26px;
+      width: 26px;
+    }
+
+    .ted-popover {
+      background: var(--ted-style-surface);
+      border: 1px solid var(--ted-style-divider);
+      border-radius: var(--ted-style-radius-sm);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+      box-sizing: border-box;
+      inset: auto;
+      margin: 0;
+      max-width: min(300px, 92vw);
+      min-width: 200px;
+      padding: 8px;
+      position: fixed;
+    }
+
+    .ted-popover::backdrop {
+      background: transparent;
+    }
+
+    .ted-popover-title {
+      color: var(--ted-style-muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 4px 8px 8px;
+    }
+
+    .ted-popover-options {
+      display: grid;
+      gap: 6px;
+      max-height: min(50vh, 320px);
+      overflow: auto;
+    }
+
+    .ted-popover-option {
+      align-items: center;
+      background: var(--ted-style-surface-2);
+      border: 1px solid var(--ted-style-divider);
+      border-radius: var(--ted-style-radius-sm);
+      color: var(--ted-style-text);
+      cursor: pointer;
+      display: flex;
+      font: inherit;
+      font-size: 0.95rem;
+      font-weight: 500;
+      min-height: 40px;
+      padding: 8px 14px;
+      text-align: left;
+      transition: background 0.18s ease, border-color 0.18s ease;
+      width: 100%;
+    }
+
+    .ted-popover-option:hover {
+      border-color: color-mix(in srgb, var(--ted-style-accent) 45%, var(--ted-style-divider));
+    }
+
+    .ted-popover-option.selected {
+      border-color: var(--ted-style-accent);
+      color: var(--ted-style-accent);
+    }
+
     .source-button-icon {
       --mdc-icon-size: 34px;
       color: inherit;
@@ -1903,6 +2128,7 @@ const DENON_EDITOR_FIELD_LABELS: Record<string, string> = {
   source_icons: "Source icons",
   source_labels: "Source labels",
   source_order: "Source order",
+  max_rows: "Max rows (0 = unlimited)",
   media_player_entity: "Media player entity",
   source_entity: "Input source entity",
   sound_mode_entity: "Sound mode entity",
@@ -2002,9 +2228,7 @@ class TedAvReceiverCardEditor extends LitElement {
           ></ha-form>
         `)}
 
-        ${this.renderGroup("status", "Status items", "mdi:gauge",
-          this.config.show_status === false || this.config.show_volume === false,
-          this.statusItemsContent(data))}
+        ${this.renderGroup("status", "Status items", "mdi:gauge", false, this.statusItemsContent())}
 
         ${this.renderGroup("sections", "Card sections", "mdi:view-dashboard-outline", true, html`
           <ha-sortable handle-selector=".drag-handle" @item-moved=${this._sectionMoved}>
@@ -2075,19 +2299,58 @@ class TedAvReceiverCardEditor extends LitElement {
     `;
   }
 
-  private statusItemsContent(data: TedAvReceiverCardConfig) {
+  private statusItemsContent() {
+    const statusOrder = orderStatusItems(this.config.status_order);
     return html`
-      <ha-form
-        .hass=${this.hass}
-        .data=${data}
-        .schema=${[
-          { name: "show_status", selector: { boolean: {} } },
-          { name: "show_volume", selector: { boolean: {} } }
-        ]}
-        .computeLabel=${this.computeLabel}
-        @value-changed=${this.handleFormChanged}
-      ></ha-form>
+      <ha-sortable handle-selector=".drag-handle" @item-moved=${this._statusMoved}>
+        <div class="status-list">
+          ${statusOrder.map((id) => this.renderStatusItemRow(id))}
+        </div>
+      </ha-sortable>
     `;
+  }
+
+  // One draggable status-item row: drag handle + label + a show toggle in the header.
+  private renderStatusItemRow(id: StatusItemId) {
+    const def = STATUS_ITEM_DEFS.find((item) => item.id === id);
+    return html`
+      <div class="status-item-row">
+        <div class="drag-handle" title="Drag to reorder">
+          <ha-icon icon="mdi:drag"></ha-icon>
+        </div>
+        <ha-icon icon=${def?.icon ?? "mdi:tune"}></ha-icon>
+        <span class="section-row-title">${def?.label ?? id}</span>
+        <ha-switch
+          .checked=${this.isStatusShown(id)}
+          @change=${(event: Event) => this.handleStatusShowToggle(id, event)}
+        ></ha-switch>
+      </div>
+    `;
+  }
+
+  private _statusMoved = (event: CustomEvent): void => {
+    event.stopPropagation();
+    const { oldIndex, newIndex } = event.detail as { oldIndex: number; newIndex: number };
+    const order = orderStatusItems(this.config.status_order);
+    if (oldIndex < 0 || oldIndex >= order.length || newIndex < 0 || newIndex >= order.length) {
+      return;
+    }
+    const next = [...order];
+    next.splice(newIndex, 0, next.splice(oldIndex, 1)[0]);
+    this.commitConfig({ ...this.config, status_order: next });
+  };
+
+  private statusShowKey(id: StatusItemId): "show_status" | "show_volume" {
+    return id === "status" ? "show_status" : "show_volume";
+  }
+
+  private isStatusShown(id: StatusItemId): boolean {
+    return this.config[this.statusShowKey(id)] !== false;
+  }
+
+  private handleStatusShowToggle(id: StatusItemId, event: Event): void {
+    const checked = (event.target as { checked?: boolean } | null)?.checked === true;
+    this.commitConfig({ ...this.config, [this.statusShowKey(id)]: checked });
   }
 
   private displaySectionContent(data: TedAvReceiverCardConfig) {
@@ -2137,7 +2400,8 @@ class TedAvReceiverCardEditor extends LitElement {
               ]
             }
           }
-        }
+        },
+        { name: "max_rows", selector: { number: { min: 0, max: 20, step: 1, mode: "box" } } }
       );
       if (this.sourceOptions.length > 0) {
         schema.push({
@@ -2492,6 +2756,9 @@ class TedAvReceiverCardEditor extends LitElement {
     if (nextConfig.show_volume !== false) {
       delete nextConfig.show_volume;
     }
+    if (typeof nextConfig.max_rows !== "number" || nextConfig.max_rows <= 0) {
+      delete nextConfig.max_rows;
+    }
     if (nextConfig.show_card_version !== true) {
       delete nextConfig.show_card_version;
     }
@@ -2529,6 +2796,10 @@ class TedAvReceiverCardEditor extends LitElement {
     if (!Array.isArray(nextConfig.section_order)
       || this.listSequenceEqual(orderSections(nextConfig.section_order), DEFAULT_SECTION_ORDER)) {
       delete nextConfig.section_order;
+    }
+    if (!Array.isArray(nextConfig.status_order)
+      || this.listSequenceEqual(orderStatusItems(nextConfig.status_order), DEFAULT_STATUS_ORDER)) {
+      delete nextConfig.status_order;
     }
 
     this.reconcileSourceOrder(nextConfig);
@@ -2890,6 +3161,46 @@ class TedAvReceiverCardEditor extends LitElement {
     }
 
     .section-row-header .drag-handle ha-icon {
+      pointer-events: none;
+    }
+
+    .status-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .status-item-row {
+      align-items: center;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
+      border-radius: 6px;
+      display: flex;
+      gap: 10px;
+      padding: 8px 12px;
+      width: 100%;
+    }
+
+    .status-item-row > ha-icon {
+      color: var(--secondary-text-color);
+      flex: none;
+    }
+
+    .status-item-row ha-switch {
+      flex: none;
+    }
+
+    .status-item-row .drag-handle {
+      align-items: center;
+      color: var(--secondary-text-color);
+      cursor: grab;
+      display: flex;
+      flex: none;
+      margin: -4px 0;
+      padding: 4px 2px;
+      touch-action: none;
+    }
+
+    .status-item-row .drag-handle ha-icon {
       pointer-events: none;
     }
   `;

@@ -5,10 +5,14 @@ import { BRANDS, CUSTOM_BRAND_ID, DEFAULT_LOGO_VARIANT, LOGO_VARIANT_OPTIONS } f
 import { NOVASTAR_CARD_EDITOR_TYPE } from "./const";
 import {
   DEFAULT_SECTION_ORDER,
+  DEFAULT_STATUS_ORDER,
   SECTION_DEFS,
+  STATUS_ITEM_DEFS,
   orderSections,
+  orderStatusItems,
   type NovastarCardConfig,
-  type SectionId
+  type SectionId,
+  type StatusItemId
 } from "./types";
 
 const NOVASTAR_EDITOR_FIELD_LABELS: Record<string, string> = {
@@ -23,6 +27,7 @@ const NOVASTAR_EDITOR_FIELD_LABELS: Record<string, string> = {
   show_card_version: "Show card version",
   show_presets: "Show presets",
   hide_presets_when_off: "Hide when device is off",
+  max_rows: "Max rows (0 = unlimited)",
   show_layout: "Show layout preview",
   preset_order: "Preset order",
   brushed: "Brushed effect",
@@ -124,9 +129,7 @@ class TedNovastarCardEditor extends LitElement {
           ></ha-form>
         `)}
 
-        ${this.renderGroup("status", "Status items", "mdi:gauge",
-          Boolean(this.config.status_entity || this.config.temperature_entity || this.config.brightness_entity),
-          this.statusItemsContent(data))}
+        ${this.renderGroup("status", "Status items", "mdi:gauge", false, this.statusItemsContent())}
 
         ${this.renderGroup("sections", "Card sections", "mdi:view-dashboard-outline", true, html`
           <ha-sortable handle-selector=".drag-handle" @item-moved=${this._sectionMoved}>
@@ -197,26 +200,72 @@ class TedNovastarCardEditor extends LitElement {
     `;
   }
 
-  private statusItemsContent(data: NovastarCardConfig) {
+  private statusItemsContent() {
+    const statusOrder = orderStatusItems(this.config.status_order);
     return html`
-      <ha-form
-        .hass=${this.hass}
-        .data=${data}
-        .schema=${[
-          { name: "status_entity", selector: { entity: {} } },
-          { name: "temperature_entity", selector: { entity: {} } },
-          { name: "brightness_entity", selector: { entity: {} } }
-        ]}
-        .computeLabel=${this.computeLabel}
-        @value-changed=${this.handleFormChanged}
-      ></ha-form>
+      <ha-sortable handle-selector=".drag-handle" @item-moved=${this._statusMoved}>
+        <div class="status-list">
+          ${statusOrder.map((id) => this.renderStatusItemRow(id))}
+        </div>
+      </ha-sortable>
     `;
+  }
+
+  // One draggable status-item row: drag handle + label + a show toggle in the header.
+  private renderStatusItemRow(id: StatusItemId) {
+    const def = STATUS_ITEM_DEFS.find((item) => item.id === id);
+    return html`
+      <div class="status-item-row">
+        <div class="drag-handle" title="Drag to reorder">
+          <ha-icon icon="mdi:drag"></ha-icon>
+        </div>
+        <ha-icon icon=${def?.icon ?? "mdi:tune"}></ha-icon>
+        <span class="section-row-title">${def?.label ?? id}</span>
+        <ha-switch
+          .checked=${this.isStatusShown(id)}
+          @change=${(event: Event) => this.handleStatusShowToggle(id, event)}
+        ></ha-switch>
+      </div>
+    `;
+  }
+
+  private _statusMoved = (event: CustomEvent): void => {
+    event.stopPropagation();
+    const { oldIndex, newIndex } = event.detail as { oldIndex: number; newIndex: number };
+    const order = orderStatusItems(this.config.status_order);
+    if (oldIndex < 0 || oldIndex >= order.length || newIndex < 0 || newIndex >= order.length) {
+      return;
+    }
+    const next = [...order];
+    next.splice(newIndex, 0, next.splice(oldIndex, 1)[0]);
+    this.commitConfig({ ...this.config, status_order: next });
+  };
+
+  // Per-status-item visibility, shown as a switch in the status row header.
+  private statusShowKey(id: StatusItemId): "show_status" | "show_temperature" | "show_brightness" {
+    if (id === "status") {
+      return "show_status";
+    }
+    if (id === "temperature") {
+      return "show_temperature";
+    }
+    return "show_brightness";
+  }
+
+  private isStatusShown(id: StatusItemId): boolean {
+    return this.config[this.statusShowKey(id)] !== false;
+  }
+
+  private handleStatusShowToggle(id: StatusItemId, event: Event): void {
+    const checked = (event.target as { checked?: boolean } | null)?.checked === true;
+    this.commitConfig({ ...this.config, [this.statusShowKey(id)]: checked });
   }
 
   private presetsSectionContent(data: NovastarCardConfig) {
     const schema: Array<Record<string, unknown>> = [];
     if (this.config.show_presets !== false) {
       schema.push({ name: "hide_presets_when_off", selector: { boolean: {} } });
+      schema.push({ name: "max_rows", selector: { number: { min: 0, max: 20, step: 1, mode: "box" } } });
     }
     if (this.config.show_presets !== false && this.presetOptions.length > 0) {
       schema.push({
@@ -490,6 +539,9 @@ class TedNovastarCardEditor extends LitElement {
       || this.config.screens_entity
       || this.config.layers_entity
       || this.config.controller_entity
+      || this.config.status_entity
+      || this.config.brightness_entity
+      || this.config.temperature_entity
     );
 
     const schema: Array<Record<string, unknown>> = [];
@@ -511,7 +563,10 @@ class TedNovastarCardEditor extends LitElement {
         { name: "preset_entity", selector: { entity: {} } },
         { name: "screens_entity", selector: { entity: {} } },
         { name: "layers_entity", selector: { entity: {} } },
-        { name: "controller_entity", selector: { entity: {} } }
+        { name: "controller_entity", selector: { entity: {} } },
+        { name: "status_entity", selector: { entity: {} } },
+        { name: "brightness_entity", selector: { entity: {} } },
+        { name: "temperature_entity", selector: { entity: {} } }
       ]
     });
 
@@ -617,6 +672,18 @@ class TedNovastarCardEditor extends LitElement {
     if (nextConfig.show_layout !== false) {
       delete nextConfig.show_layout;
     }
+    if (nextConfig.show_status !== false) {
+      delete nextConfig.show_status;
+    }
+    if (nextConfig.show_temperature !== false) {
+      delete nextConfig.show_temperature;
+    }
+    if (nextConfig.show_brightness !== false) {
+      delete nextConfig.show_brightness;
+    }
+    if (typeof nextConfig.max_rows !== "number" || nextConfig.max_rows <= 0) {
+      delete nextConfig.max_rows;
+    }
     if (nextConfig.brushed !== false) {
       delete nextConfig.brushed;
     }
@@ -661,6 +728,12 @@ class TedNovastarCardEditor extends LitElement {
       || this.listSequenceEqual(orderSections(nextConfig.section_order), DEFAULT_SECTION_ORDER)
     ) {
       delete nextConfig.section_order;
+    }
+    if (
+      !Array.isArray(nextConfig.status_order)
+      || this.listSequenceEqual(orderStatusItems(nextConfig.status_order), DEFAULT_STATUS_ORDER)
+    ) {
+      delete nextConfig.status_order;
     }
 
     this.reconcilePresetOrder(nextConfig);
@@ -989,6 +1062,46 @@ class TedNovastarCardEditor extends LitElement {
     }
 
     .section-row-header .drag-handle ha-icon {
+      pointer-events: none;
+    }
+
+    .status-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .status-item-row {
+      align-items: center;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
+      border-radius: 6px;
+      display: flex;
+      gap: 10px;
+      padding: 8px 12px;
+      width: 100%;
+    }
+
+    .status-item-row > ha-icon {
+      color: var(--secondary-text-color);
+      flex: none;
+    }
+
+    .status-item-row ha-switch {
+      flex: none;
+    }
+
+    .status-item-row .drag-handle {
+      align-items: center;
+      color: var(--secondary-text-color);
+      cursor: grab;
+      display: flex;
+      flex: none;
+      margin: -4px 0;
+      padding: 4px 2px;
+      touch-action: none;
+    }
+
+    .status-item-row .drag-handle ha-icon {
       pointer-events: none;
     }
 

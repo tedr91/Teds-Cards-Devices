@@ -25,8 +25,13 @@ export type NovastarCardConfig = {
   hide_presets_when_off?: boolean;
   show_layout?: boolean;
   section_order?: string[];
+  status_order?: string[];
+  show_status?: boolean;
+  show_temperature?: boolean;
+  show_brightness?: boolean;
   preset_order?: string[];
   preset_baseline?: string[];
+  max_rows?: number;
   screen_color?: string;
   screen_background_color?: string;
   debug_layout?: boolean;
@@ -121,6 +126,38 @@ export function orderSections(configured: string[] | undefined): SectionId[] {
     }
   }
   for (const id of DEFAULT_SECTION_ORDER) {
+    if (!seen.has(id)) {
+      result.push(id);
+    }
+  }
+  return result;
+}
+
+// The header status items, in default order. Each is a small indicator the user
+// can hide or reorder via the editor's "Status items" section.
+export type StatusItemId = "status" | "temperature" | "brightness";
+
+export const STATUS_ITEM_DEFS: Array<{ id: StatusItemId; label: string; icon: string }> = [
+  { id: "status", label: "Status", icon: "mdi:lan-connect" },
+  { id: "temperature", label: "Temperature", icon: "mdi:thermometer" },
+  { id: "brightness", label: "Brightness", icon: "mdi:brightness-6" }
+];
+
+export const DEFAULT_STATUS_ORDER: StatusItemId[] = STATUS_ITEM_DEFS.map((item) => item.id);
+
+// Same normalization as orderSections, for the header status items.
+export function orderStatusItems(configured: string[] | undefined): StatusItemId[] {
+  const result: StatusItemId[] = [];
+  const seen = new Set<string>();
+  if (Array.isArray(configured)) {
+    for (const id of configured) {
+      if (DEFAULT_STATUS_ORDER.includes(id as StatusItemId) && !seen.has(id)) {
+        result.push(id as StatusItemId);
+        seen.add(id);
+      }
+    }
+  }
+  for (const id of DEFAULT_STATUS_ORDER) {
     if (!seen.has(id)) {
       result.push(id);
     }
