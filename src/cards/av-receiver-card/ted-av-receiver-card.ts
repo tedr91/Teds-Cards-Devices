@@ -2027,6 +2027,12 @@ export class TedAvReceiverCard extends LitElement {
 
     .ted-popover {
       background: var(--ted-style-surface);
+      /* Opt into the theme's card frost so on translucent themes (Mica/glass) the
+         surface blurs the dashboard behind it instead of showing it straight through
+         — a plain [popover] isn't an ha-card, so it doesn't get that blur automatically.
+         Falls back to none on opaque/flat themes. */
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none);
+      backdrop-filter: var(--ha-card-backdrop-filter, none);
       border: 1px solid var(--ted-style-divider);
       border-radius: var(--ted-style-radius-sm);
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);

@@ -214,6 +214,10 @@ section_order: [presets, layout]
 
 The newest entry below is used as the GitHub Release notes by the release workflow, so it shows in the Home Assistant / HACS **update** dialog when you update. Newest first.
 
+### v0.0.5
+
+- **Translucent themes (e.g. Windows 11 Mica)** — the source / preset / layer chooser popovers no longer look **see-through**; they now pick up the theme's frosted-glass blur like regular cards do.
+
 ### v0.0.4
 
 - **“Max rows” now defaults to 1** on both cards' button grids (AV Receiver input sources, NovaStar presets) — each shows a single row with an overflow “…” by default. Set it to `0` for unlimited.
